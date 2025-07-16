@@ -18,7 +18,10 @@ class ABTestingTrafficBypass {
     private const AB_SPLIT_RATIO = 20; // 20% of traffic goes to loja
     private const AB_TEST_COOKIE = 'ab_test_bypass';
     private const AB_TEST_COOKIE_DURATION = 86400; // 1 day
-    
+    private const AB_TEST_COOKIE_PATH = '/';
+    private const AB_TEST_COOKIE_HTTP_ONLY = true;
+    private const AB_TEST_COOKIE_DOMAIN = 'jornadamima.com.br';
+     
     
     public function __construct() {
         add_action('init', array($this, 'handle', -99999999)); // High priority to run before any other init actions
@@ -32,6 +35,7 @@ class ABTestingTrafficBypass {
 
         $should_redirect = $this->lottery_check();
         if (!$should_redirect) {
+            $this->set_ab_test_cookie();
             return;
         }
 
@@ -39,9 +43,21 @@ class ABTestingTrafficBypass {
         exit;
     }
 
-    public function lottery_check(): bool
+    private function lottery_check(): bool
     {
         return random_int(1, 100) <= self::AB_SPLIT_RATIO;
+    }
+
+    private function set_ab_test_cookie(): void
+    {
+        setcookie(
+            name: self::AB_TEST_COOKIE,
+            value: 'bypass',
+            expires_or_options: time() + self::AB_TEST_COOKIE_DURATION,
+            path: self::AB_TEST_COOKIE_PATH,
+            domain: self::AB_TEST_COOKIE_DOMAIN,
+            httponly: self::AB_TEST_COOKIE_HTTP_ONLY
+        );
     }
     
     private function should_bypass_test(): bool 
