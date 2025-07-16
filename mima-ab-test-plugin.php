@@ -33,8 +33,7 @@ class ABTestingTrafficBypass {
             return;
         }
 
-        $should_redirect = $this->lottery_check();
-        if (!$should_redirect) {
+        if (!$this->lottery_check()) {
             $this->set_ab_test_cookie();
             return;
         }
