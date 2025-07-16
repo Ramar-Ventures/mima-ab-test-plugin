@@ -93,12 +93,12 @@ class ABTestingTrafficBypass {
         global $pagenow;
         $request_uri = $_SERVER['REQUEST_URI'] ?? '';
         
-        return (
+        return 
             $pagenow === 'wp-login.php' ||
             str_contains($request_uri, 'wp-login.php') ||
             str_contains($request_uri, 'wp-admin') ||
             $GLOBALS['pagenow'] === 'wp-login.php'
-        );
+        ;
     }
     
     private function is_api_request() {
