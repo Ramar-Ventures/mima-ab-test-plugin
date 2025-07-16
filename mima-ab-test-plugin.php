@@ -63,6 +63,7 @@ class ABTestingTrafficBypass {
     {
         return
             $this->is_non_get_request() ||
+            $this->has_bypass_cookie() ||
             $this->is_bot() ||
             $this->is_login_page() ||
             $this->is_api_request() ||
@@ -73,6 +74,11 @@ class ABTestingTrafficBypass {
             $this->is_woocommerce_page() ||
             $this->is_post_or_blog() ||
             $this->has_woocommerce_session();
+    }
+
+    private function has_bypass_cookie(): bool
+    {
+        return isset($_COOKIE[self::AB_TEST_COOKIE]);
     }
     
     private function is_bot(): bool 
