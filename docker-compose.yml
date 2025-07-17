@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: mariadb:latest
+    container_name: mima_mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+    networks:
+      - wordpress
+
+  wordpress:
+    depends_on:
+      - db
+    image: wordpress:latest
+    container_name: mima_wordpress
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DEBUG: 1
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_DEBUG', true);
+        define('WP_DEBUG_LOG', true);
+        define('WP_DEBUG_DISPLAY', true);
+        define('SCRIPT_DEBUG', true);
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./mima-ab-test-plugin.php:/var/www/html/wp-content/plugins/mima-ab-test-plugin/mima-ab-test-plugin.php
+    networks:
+      - wordpress
+
+volumes:
+  dbdata: {}
+  wordpress_data: {}
+
+networks:
+  wordpress:
+    driver: bridge
