@@ -37,8 +37,9 @@ services:
         define('WP_DEBUG_DISPLAY', true);
         define('SCRIPT_DEBUG', true);
     volumes:
-      - wordpress_data:/var/www/html
+      - ./wp:/var/www/html
       - ./mima-ab-test-plugin.php:/var/www/html/wp-content/plugins/mima-ab-test-plugin/mima-ab-test-plugin.php
+      - ./php.ini:/usr/local/etc/php/conf.d/custom.ini
     networks:
       - wordpress
 

@@ -1,0 +1,23 @@
+# END Prevent AB Test Plugin from caching
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteCond %{QUERY_STRING} !nowprocket [NC]
+RewriteCond %{HTTP:Cookie} !ab_test_bypass=1 [NC]
+RewriteCond %{HTTP_USER_AGENT} !bot [NC]
+RewriteCond %{HTTP_USER_AGENT} !crawler [NC]
+RewriteCond %{HTTP_USER_AGENT} !spider [NC]
+RewriteCond %{HTTP_USER_AGENT} !slurp [NC]
+RewriteCond %{HTTP_USER_AGENT} !(googlebot|bingbot|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegram) [NC]
+RewriteCond %{QUERY_STRING} ^$
+RewriteRule ^(.*)$ /$1?nowprocket [R=302,L]
+RewriteCond %{QUERY_STRING} !nowprocket [NC]
+RewriteCond %{HTTP:Cookie} !ab_test_bypass=1 [NC]
+RewriteCond %{HTTP_USER_AGENT} !bot [NC]
+RewriteCond %{HTTP_USER_AGENT} !crawler [NC]
+RewriteCond %{HTTP_USER_AGENT} !spider [NC]
+RewriteCond %{HTTP_USER_AGENT} !slurp [NC]
+RewriteCond %{HTTP_USER_AGENT} !(googlebot|bingbot|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegram) [NC]
+RewriteCond %{QUERY_STRING} !^$
+RewriteRule ^(.*)$ /$1?%{QUERY_STRING}&nowprocket [R=302,L]
+</IfModule>
+# END Prevent AB Test Plugin from caching
