@@ -19,8 +19,6 @@ class ABTestingTrafficBypass {
     private const AB_TEST_COOKIE = 'ab_test_bypass';
     private const AB_TEST_COOKIE_DURATION = 86400; // 1 day
     private const AB_TEST_COOKIE_PATH = '/';
-    private const AB_TEST_COOKIE_HTTP_ONLY = true;
-    private const AB_TEST_COOKIE_DOMAIN = 'jornadamima.com.br';
      
     
     public function __construct() {
@@ -28,7 +26,11 @@ class ABTestingTrafficBypass {
     }
     
     public function handle(): void
-    {        
+    {   
+        if($this->has_bypass_cookie()) {
+            return;
+        }
+
         if($this->should_bypass_test()) {
             return;
         }
@@ -38,7 +40,11 @@ class ABTestingTrafficBypass {
             return;
         }
 
-        wp_redirect(self::VARIANT_URL, 302);
+        // Prevent browser caching of the redirect
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        header('Location: ' . self::VARIANT_URL, true, 302);
         exit;
     }
 
@@ -53,9 +59,7 @@ class ABTestingTrafficBypass {
             name: self::AB_TEST_COOKIE,
             value: 'bypass',
             expires_or_options: time() + self::AB_TEST_COOKIE_DURATION,
-            path: self::AB_TEST_COOKIE_PATH,
-            domain: self::AB_TEST_COOKIE_DOMAIN,
-            httponly: self::AB_TEST_COOKIE_HTTP_ONLY
+            path: self::AB_TEST_COOKIE_PATH
         );
     }
     
@@ -63,7 +67,6 @@ class ABTestingTrafficBypass {
     {
         return
             $this->is_non_get_request() ||
-            $this->has_bypass_cookie() ||
             $this->is_bot() ||
             $this->is_login_page() ||
             $this->is_api_request() ||
