@@ -24,12 +24,13 @@ class ABTestingTrafficBypass {
      
     
     public function __construct() {
-        add_action('init', array($this, 'handle', -99999999)); // High priority to run before any other init actions
+        add_action('init', array($this, 'handle'), -99999999); // High priority to run before any other init actions
     }
     
     public function handle(): void
     {        
         if($this->should_bypass_test()) {
+            $this->set_ab_test_cookie();
             return;
         }
 
