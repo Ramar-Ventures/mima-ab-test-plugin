@@ -32,7 +32,6 @@ class ABTestingTrafficBypass {
         }
 
         if($this->should_bypass_test()) {
-            $this->set_ab_test_cookie();
             return;
         }
 
@@ -45,7 +44,7 @@ class ABTestingTrafficBypass {
         header('Cache-Control: no-cache, no-store, must-revalidate');
         header('Pragma: no-cache');
         header('Expires: 0');
-        header('Location: ' . self::VARIANT_URL, true, 302);
+        wp_redirect(self::VARIANT_URL, 302);
         exit;
     }
 
@@ -68,6 +67,9 @@ class ABTestingTrafficBypass {
     {
         return
             $this->is_non_get_request() ||
+            (defined('XMLRPC_REQUEST') && XMLRPC_REQUEST) ||
+            (defined('REST_REQUEST') && REST_REQUEST) ||
+            (defined('DOING_AJAX') && DOING_AJAX) ||
             $this->is_bot() ||
             $this->is_login_page() ||
             $this->is_api_request() ||
