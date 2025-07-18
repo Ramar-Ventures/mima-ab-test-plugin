@@ -22,22 +22,31 @@ class ABTestingTrafficBypass {
      
     
     public function __construct() {
-        add_action('init', array($this, 'handle'), -99999999); // High priority to run before any other init actions
+        add_action('wp_ajax_nopriv_ab_test_check', array($this, 'handle_ajax_request'));
+        add_action('wp_ajax_ab_test_check', array($this, 'handle_ajax_request'));
     }
     
-    public function handle(): void
-    {   
+    public function handle_ajax_request(): void
+    {
+        $target_url = $this->determine_target_url();
+
+        
         if($this->has_bypass_cookie()) {
-            return;
+            wp_redirect($target_url, 302);
+            exit;
         }
 
-        if($this->should_bypass_test()) {
-            return;
+        if($this->should_bypass_test($target_url)) {
+            $this->set_ab_test_cookie('bypass');
+            wp_redirect($target_url, 302);
+            exit;
         }
 
         if (!$this->lottery_check()) {
-            $this->set_ab_test_cookie();
-            return;
+            $this->set_ab_test_cookie('lottery');
+            // Redirect back to the determined URL
+            wp_redirect($target_url, 302);
+            exit;
         }
 
         // Prevent browser caching of the redirect
@@ -47,39 +56,82 @@ class ABTestingTrafficBypass {
         wp_redirect(self::VARIANT_URL, 302);
         exit;
     }
+    
+    private function determine_target_url(): string
+    {
+        $original_path = $_GET['original_path'] ?? '';
+        if(empty($original_path)) {
+            return home_url('/');
+        }
+
+        // Parse the original path to get just the path part
+        $parsed_url = parse_url($original_path);
+        $path = $parsed_url['path'] ?? '/';
+
+        // Get all query parameters from $_GET and filter out AB test parameters
+        $query_params = $_GET;
+        unset($query_params['action']);
+        unset($query_params['ab_test_check']);
+        unset($query_params['original_path']);
+
+        // Rebuild the query string if there are remaining parameters
+        if (!empty($query_params)) {
+            $filtered_query = http_build_query($query_params);
+            return home_url($path . '?' . $filtered_query);
+        }
+
+        return home_url($path);
+    }
 
     private function lottery_check(): bool
     {
-        return random_int(1, 100) <= self::AB_SPLIT_RATIO;
+        // Use a deterministic approach based on current timestamp
+        // This creates a predictable cycle that approximates the desired ratio
+        $seed = floor(time() / 10); // Changes every 10 seconds
+        $hash = crc32($seed . 'ab_test_salt');
+        $percentage = abs($hash) % 100;
+        
+        return $percentage < self::AB_SPLIT_RATIO;
     }
-
-    private function set_ab_test_cookie(): void
+    
+    private function set_ab_test_cookie(string $value): void
     {
         setcookie(
             name: self::AB_TEST_COOKIE,
-            value: 'bypass',
+            value: $value,
             expires_or_options: time() + self::AB_TEST_COOKIE_DURATION,
             path: self::AB_TEST_COOKIE_PATH
         );
     }
     
-    private function should_bypass_test(): bool 
+    private function should_bypass_test(string $target_url = ''): bool 
     {
+        $is_non_get = $this->is_non_get_request();
+        $is_xmlrpc = (defined('XMLRPC_REQUEST') && XMLRPC_REQUEST);
+        $is_rest = (defined('REST_REQUEST') && REST_REQUEST);
+        $is_bot = $this->is_bot();
+        $is_login = $this->is_login_page($target_url);
+        $is_api = $this->is_api_request($target_url);
+        $is_wp_core = $this->is_wordpress_core_file($target_url);
+        $is_logged_in = is_user_logged_in();
+        $is_webhook = $this->is_webhook_request($target_url);
+        $is_woocommerce = $this->is_woocommerce_page($target_url);
+        $is_post_blog = $this->is_post_or_blog($target_url);
+        $has_wc_session = $this->has_woocommerce_session();
+                
         return
-            $this->is_non_get_request() ||
-            (defined('XMLRPC_REQUEST') && XMLRPC_REQUEST) ||
-            (defined('REST_REQUEST') && REST_REQUEST) ||
-            (defined('DOING_AJAX') && DOING_AJAX) ||
-            $this->is_bot() ||
-            $this->is_login_page() ||
-            $this->is_api_request() ||
-            $this->is_wordpress_core_file() ||
-            is_user_logged_in() ||
-            is_admin() ||
-            $this->is_webhook_request() ||
-            $this->is_woocommerce_page() ||
-            $this->is_post_or_blog() ||
-            $this->has_woocommerce_session();
+            $is_non_get ||
+            $is_xmlrpc ||
+            $is_rest ||
+            $is_bot ||
+            $is_login ||
+            $is_api ||
+            $is_wp_core ||
+            $is_logged_in ||
+            $is_webhook ||
+            $is_woocommerce ||
+            $is_post_blog ||
+            $has_wc_session;
     }
 
     private function has_bypass_cookie(): bool
@@ -95,9 +147,9 @@ class ABTestingTrafficBypass {
         return preg_match($bot_pattern, $user_agent) === 1;
     }
     
-    private function is_login_page() {
+    private function is_login_page(string $target_url = '') {
         global $pagenow;
-        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+        $request_uri = !empty($target_url) ? parse_url($target_url, PHP_URL_PATH) : ($_SERVER['REQUEST_URI'] ?? '');
         
         return 
             $pagenow === 'wp-login.php' ||
@@ -107,19 +159,17 @@ class ABTestingTrafficBypass {
         ;
     }
     
-    private function is_api_request() {
-        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+    private function is_api_request(string $target_url = '') {
+        $request_uri = !empty($target_url) ? parse_url($target_url, PHP_URL_PATH) : ($_SERVER['REQUEST_URI'] ?? '');
         
         return 
             str_contains($request_uri, '/wp-json/') ||
-            str_contains($request_uri, 'admin-ajax.php')||
-            defined('REST_REQUEST') && REST_REQUEST ||
-            defined('DOING_AJAX') && DOING_AJAX
+            str_contains($request_uri, 'admin-ajax.php')
         ;
     }
     
-    private function is_webhook_request() {
-        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+    private function is_webhook_request(string $target_url = '') {
+        $request_uri = !empty($target_url) ? parse_url($target_url, PHP_URL_PATH) : ($_SERVER['REQUEST_URI'] ?? '');
         
         return 
             strpos($request_uri, '/webhook') !== false ||
@@ -129,19 +179,40 @@ class ABTestingTrafficBypass {
         ;
     }
     
-    private function is_woocommerce_page(): bool 
+    private function is_woocommerce_page(string $target_url = ''): bool 
     {
+        if (!empty($target_url)) {
+            // For target URL, we need to check the page type by URL patterns
+            $path = parse_url($target_url, PHP_URL_PATH);
+            return 
+                str_contains($path, '/cart') ||
+                str_contains($path, '/checkout') ||
+                str_contains($path, '/my-account') ||
+                str_contains($path, '/shop');
+        }
+        
         return is_cart() || is_checkout() || is_account_page();
     }
     
-    private function is_post_or_blog() : bool
+    private function is_post_or_blog(string $target_url = '') : bool
     {
+        if (!empty($target_url)) {
+            // For target URL, we need to get the post ID and check its type
+            $post_id = url_to_postid($target_url);
+            if ($post_id) {
+                return get_post_type($post_id) === 'post';
+            }
+            // If we can't determine the post ID, check URL patterns
+            $path = parse_url($target_url, PHP_URL_PATH);
+            return str_contains($path, '/blog') || preg_match('/\/\d{4}\/\d{2}\//', $path);
+        }
+        
         return get_post_type() === 'post';
     }
     
-    private function is_wordpress_core_file(): bool
+    private function is_wordpress_core_file(string $target_url = ''): bool
     {
-        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+        $request_uri = !empty($target_url) ? parse_url($target_url, PHP_URL_PATH) : ($_SERVER['REQUEST_URI'] ?? '');
         $core_pattern = '/\/(wp-content|wp-includes|wp-admin|wp-json)|\/xmlrpc\.php|\/robots\.txt|\/sitemap\.xml|\/feed/';
         
         return preg_match($core_pattern, $request_uri) === 1;
